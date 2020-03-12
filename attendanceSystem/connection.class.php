@@ -1,0 +1,174 @@
+<?php
+class Common{
+	public $conn;
+	public $servername = "localhost";
+	public $username = "root";
+	public $password = "";
+	public $dbname = "attendance";
+	public function __construct(){
+	    //session_start();
+	    $this->connect();
+	}
+	public function connect(){
+		$this->conn = new mysqli($this->servername, $this->username, $this->password, $this->dbname);
+
+	// Check connection
+		if ($this->conn->connect_error) {
+	    	die("Connection failed: " . $this->conn->connect_error);
+		}
+	}
+	public function getData($sql){
+		$result = $this->conn->query($sql);
+		$data = array();
+		if ($result->num_rows > 0) {
+	    // output data of each row
+		    while($row = $result->fetch_assoc()) {
+		    	$data[] = $row;
+		        
+		    }
+		    return $data;
+		} else {
+	    	return false;
+		}
+	}
+
+	public function setSuccessMsg($msg) {
+        if ($msg != '') {
+            $_SESSION['success'][] = $msg;
+        }
+    }
+
+    public function getSuccessMsg() {
+        $msg = '';
+        if (isset($_SESSION['success'])) {
+            foreach ($_SESSION['success'] as $k => $v) {
+                $msg .= '<div class="alert alert-success alert-dismissable"><button type="button" class="close" data-dismiss="alert" aria-hidden="true" style="width:300px;">x</button>' . $v . '</div>';
+            }
+            return $msg;
+        }
+    }
+
+    public function setErrorMsg($msg) {
+        if ($msg != '')
+            $_SESSION['error'][] = $msg;
+    }
+
+    public function getErrorMsg() {
+        $msg = '';
+        if (isset($_SESSION['error'])) {
+            foreach ($_SESSION['error'] as $k => $v) {
+                $msg .= '<div class="alert alert-danger alert-dismissable"><button type="button" class="close" data-dismiss="alert" aria-hidden="true">X</button>' . $v . '</div>';
+            }
+            return $msg;
+        }
+    }
+
+    public function unsetMessage() {
+        if (isset($_SESSION['error']) || isset($_SESSION['success'])) {
+            unset($_SESSION['error']);
+            unset($_SESSION['success']);
+        }
+    }
+	public function validateLogin(){
+		if(isset($_POST)){
+			$username = $_POST['username'];
+			$password = $_POST['password'];
+			if(!isset($username) || !isset($password)){
+				$this->setErrorMsg("Username or password is empty!");
+				header("location:index.php");
+				exit;
+			}
+			$query = "select * from tbl_users where email_id='$username' and password='$password'";
+			$chkUser = $this->getData($query);
+			if($chkUser[0]['email_id']){
+				$userData = $this->getData("select * from tbl_users where email_id='$username' and password='$password'");
+				
+				$_SESSION['email_id'] = $userData[0]['email_id'];
+				$_SESSION['name'] = $userData[0]['name'];
+				$_SESSION['rfid_uid'] = $userData[0]['rfid_uid'];
+
+				header("location:viewAttendance.php");
+				exit;
+			}else{
+				$this->setErrorMsg("User does not exists with given credentials!");
+				return ;
+			}
+		}
+	}
+	public function getAttendanceData($month,$year){
+		if(!is_numeric($month) || $month>12 || $month<1){
+			$this->setErrorMsg("Please Select valid month!");
+			header("location:viewAttendance.php");
+			exit;
+		}
+		$retData = array();
+		$fullDate = $year."-".$month."-"."01";
+		//print_r($_SESSION);
+		
+			  $sql = "SELECT t1.*,t2.rfid_uid,min(punch_time) as punchin,max(punch_time) as punchout,t2.name FROM tbl_attendance as t1 right join tbl_users as t2 on t1.rfid_uid=t2.rfid_uid WHERE YEAR(punch_time) = $year AND MONTH(punch_time) = $month and t2.rfid_uid='".$_SESSION['rfid_uid']."'";
+			$retData = $this->getData($sql);
+		
+		return $retData;
+	}
+	public function getRFIDAttendanceApi(){
+		$rfid_uid = trim($_REQUEST['uid']);
+		$sql = "select count(*) as tot from tbl_users where rfid_uid='$rfid_uid'";
+
+		$data = $this->getData($sql);
+		$date = date('Y-m-d H:i:s',time());
+		//$date = date_format($date,'Y-m-d H:i:s');
+		if(count($data)>0 && $data[0]['tot']>0){
+			$sql = "insert into tbl_attendance(rfid_uid,punch_time) values('$rfid_uid','$date')";
+			$flag = $this->conn->query($sql);
+			if($flag){
+				echo "Attendance marked successfully!";
+				die;
+			}else{
+				echo "Sorry! Something unexpected happened!";
+				die;	
+			}
+
+		}else{
+			echo "invalid access";die;
+		}
+	}
+	public function checkUIDAlreadyExists(){
+		$rfid_uid = trim($_REQUEST['uid']);
+		if(!isset($rfid_uid)||strlen($rfid_uid)<8 || empty($rfid_uid)){
+			//echo json_encode(array("msg_type"=>"error","msg"=>"RFID Code not Received"));
+			echo "2";
+			exit;
+		}
+		$sql = "select count(*)as tot from tbl_users where rfid_uid='$rfid_uid'";
+		$data = $this->getData($sql);
+		if(count($data)>0 && $data[0]['tot']>0){
+			//echo json_encode(array("msg_type"=>"error","msg"=>"This RFID Card is already Exists or Registered!"));
+			echo "0";
+			exit;
+		}else{
+			echo "1";
+			//echo json_encode(array("msg_type"=>"success","msg"=>"This is new RFID Card"));
+			exit;
+		}
+	}
+
+	public function addUser(){
+		$name = trim($_REQUEST['name']);
+		$rfid_uid = trim($_REQUEST['uid']);
+		if(empty($name) || empty($rfid_uid)){
+			echo "Name and RFID UID Cannot be empty!";
+			exit;
+		}
+		$end = "@gmail.com";
+		$email = $name.$end;
+		$sql = "insert into tbl_users set name = '$name',rfid_uid = '$rfid_uid', email_id = '$email' , password = '12345'";
+		if($this->conn->query($sql)){
+			echo "User Added Successfully!";
+			exit;
+		}else{
+			echo "Sorry! Something unexpected happened!";
+			exit;
+		}
+	}
+	
+} 
