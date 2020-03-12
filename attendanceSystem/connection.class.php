@@ -110,6 +110,18 @@ class Common{
 		
 		return $retData;
 	}
+	public function getDayOfDate($date){
+		return date("d",strtotime($date));
+	}
+	public function getTimeOfDate($date){
+		return date("H:i:s",strtotime($date));
+	}
+	public function getHoursBetweenDates($date1,$date2){
+		$t1 = StrToTime ( $date2);
+		$t2 = StrToTime ($date1);
+		$diff = $t1 - $t2;
+		return $hours = round($diff / ( 60 * 60 ),2);
+	}
 	public function getRFIDAttendanceApi(){
 		$rfid_uid = trim($_REQUEST['uid']);
 		$sql = "select count(*) as tot from tbl_users where rfid_uid='$rfid_uid'";
